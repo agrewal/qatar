@@ -13,7 +13,7 @@ q, err := qatar.NewQ("/tmp/dir")
 
 You can `Peek` without dequeueing by doing the following
 
-```
+```go
 // to peek a single item
 item, err := q.Peek()
 
@@ -32,6 +32,6 @@ Items consist of an `Id` and a payload of `Data`
 You can directly delete an item from the queue (in any position), by doing the
 following
 
-```
+```go
 err := q.Delete(item.Id)
 ```
