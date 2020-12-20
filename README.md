@@ -1,6 +1,6 @@
 # qatar
 
-Qatar is a simple queuing system backed by an on-disk key-value store using
+`qatar` is a simple queuing system backed by an on-disk key-value store using
 `pebble`. You can enqueue or dequeue a payload of type `[]byte`
 
 # Usage
