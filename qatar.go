@@ -29,13 +29,19 @@ func (q *Q) Close() {
 
 // Enqueues data and returns the id of the corresponding entry in the key value
 // store. This id can be used to directly delete the entry.
-func (q *Q) Enqueue(data []byte) (ksuid.KSUID, error) {
-	id := ksuid.New()
+func (q *Q) Enqueue(data []byte) (id ksuid.KSUID, err error) {
+	id = ksuid.New()
+	err = q.EnqueueWithId(data, id)
+	return
+}
+
+// Enqueue items with a specified id
+func (q *Q) EnqueueWithId(data []byte, id ksuid.KSUID) error {
 	err := q.db.Set(id.Bytes(), data, nil)
 	if err != nil {
-		return id, err
+		return err
 	}
-	return id, nil
+	return nil
 }
 
 // Struct corresponding to an Item that is returned from the queue
@@ -60,12 +66,28 @@ func (q *Q) Dequeue() (*Item, error) {
 	return item, nil
 }
 
-// `Peek()` returns the first item if any. It does not dequeue the item
-func (q *Q) Peek() (*Item, error) {
-	iter := q.db.NewIter(&pebble.IterOptions{})
-	defer iter.Close()
-	if !iter.First() {
-		return nil, iter.Error()
+// Peeks and deletes the first item after the provided id.
+func (q *Q) DequeueAfter(id ksuid.KSUID) (*Item, error) {
+	item, err := q.PeekAfter(id)
+	if err != nil {
+		return nil, err
+	}
+	if item != nil {
+		err := q.db.Delete(item.Id.Bytes(), nil)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return item, nil
+}
+
+func itemFromIter(iter *pebble.Iterator) (*Item, error) {
+	err := iter.Error()
+	if err != nil {
+		return nil, err
+	}
+	if !iter.Valid() {
+		return nil, nil
 	}
 	id, err := ksuid.FromBytes(iter.Key())
 	if err != nil {
@@ -80,11 +102,7 @@ func (q *Q) Peek() (*Item, error) {
 	return &Item{id, v}, nil
 }
 
-// Peeks atmost `num` items from the queue. It does not dequeue these.
-func (q *Q) PeekMulti(num int) ([]Item, error) {
-	iter := q.db.NewIter(&pebble.IterOptions{})
-	defer iter.Close()
-	iter.First()
+func multiItemsFromIter(iter *pebble.Iterator, num int) ([]Item, error) {
 	i := 0
 	var items []Item
 	for iter.Valid() && i < num {
@@ -106,6 +124,36 @@ func (q *Q) PeekMulti(num int) ([]Item, error) {
 		return nil, iter.Error()
 	}
 	return items, nil
+}
+
+// `Peek()` returns the first item if any. It does not dequeue the item
+func (q *Q) Peek() (*Item, error) {
+	iter := q.db.NewIter(&pebble.IterOptions{})
+	defer iter.Close()
+	iter.First()
+	return itemFromIter(iter)
+}
+
+// Peeks atmost `num` items from the queue. It does not dequeue these.
+func (q *Q) PeekMulti(num int) ([]Item, error) {
+	iter := q.db.NewIter(&pebble.IterOptions{})
+	defer iter.Close()
+	iter.First()
+	return multiItemsFromIter(iter, num)
+}
+
+func (q *Q) PeekAfter(id ksuid.KSUID) (*Item, error) {
+	iter := q.db.NewIter(&pebble.IterOptions{})
+	defer iter.Close()
+	iter.SeekGE(id.Bytes())
+	return itemFromIter(iter)
+}
+
+func (q *Q) PeekMultiAfter(num int, id ksuid.KSUID) ([]Item, error) {
+	iter := q.db.NewIter(&pebble.IterOptions{})
+	defer iter.Close()
+	iter.SeekGE(id.Bytes())
+	return multiItemsFromIter(iter, num)
 }
 
 // Deletes the specified `id` from the queue. This can be in any position, and
