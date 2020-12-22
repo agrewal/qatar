@@ -22,6 +22,32 @@ func NewQ(dirName string) (*Q, error) {
 	return &Q{db}, nil
 }
 
+// Creates a queue in the specified directory. If this directory already
+// exists, then we get an error. If opening an existing queue, use `OpenQ`
+// instead.
+func CreateQ(dirName string) (*Q, error) {
+	db, err := pebble.Open(dirName, &pebble.Options{
+		ErrorIfExists: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &Q{db}, nil
+}
+
+// Opens an existing queue in the specified directory. If this directory does
+// not exist, then an error is returned. To create a queue, use the `CreateQ`
+// method.
+func OpenQ(dirName string) (*Q, error) {
+	db, err := pebble.Open(dirName, &pebble.Options{
+		ErrorIfNotExists: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &Q{db}, nil
+}
+
 // Cleans up by closing the underlying db
 func (q *Q) Close() {
 	q.db.Close()
